@@ -1,0 +1,161 @@
+#Załadowanie potrzebnych bibliotek:
+
+library(fractaldim)
+library(imager)
+library(wavelets)
+library(jpeg)
+library(cluster)
+library(clustertend)
+library(tidyverse)
+library(scatterplot3d)
+library(knitr)
+
+
+
+#Wczytywanie obrazów zapisanych na dysku komputera:
+
+mona <- load.image("C:/Users/Julinka Słodzinka/OneDrive/Pulpit/Praca inzynierska/mona_lisa.jpg")
+dama <- load.image("C:/Users/Julinka Słodzinka/OneDrive/Pulpit/Praca inzynierska/dama_z_lasiczka.jpg")
+glowa <- load.image("C:/Users/Julinka Słodzinka/OneDrive/Pulpit/Praca inzynierska/glowa.jpg")
+plaza <- load.image("C:/Users/Julinka Słodzinka/OneDrive/Pulpit/Praca inzynierska/plaza.jpg")
+
+
+#Wyświetlenie wczytanych obrazów:
+
+par(mfrow = c(2,4))
+for (name in names){
+  image <- load.image(name)
+  plot(image, axes = FALSE)
+}
+
+#Definiowanie funkcji wczytującej obraz w formacie JPEG i Konwertującej obraz na dane w postaci ramki danych zawierającej współrzędne pikseli oraz ich wartości składowych kolorów RGB:
+
+rgb_modifier <- function(painting){
+  image <- readJPEG(painting)
+  dim <- dim(image)
+  dataframe <- data.frame(x = rep(1:dim[2], each = dim[1]),
+                          y = rep(dim[1]:1, dim[2]),
+                          red = as.vector(image[,,1]),
+                          green = as.vector(image[,,2]),
+                          blue = as.vector(image[,,3]))
+}
+
+#Wywołanie funkcji rgb_modyfier:
+
+mona_lisa <- rgb_modifier(mona)
+dama_z_lasiczka <- rgb_modifier(dama)
+beksinski_glowa <- rgb_modifier(glowa)
+beksinski_plaza <- rgb_modifier(plaza)
+
+rgb_images <- list(mona_lisa, dama_z_lasiczka, beksinski_glowa, beksinski_plaza)
+
+
+#Definiowanie funkcji optimizer, służącej do znalezienia optymalnej liczby klastrów
+
+optimizer <- function(painting){
+  clusters <- c()
+  for (i in 1:10){
+    cluster <- clara(painting[,c("red", "green", "blue")], i)
+    clusters[i] <- cluster$silinfo$avg.width
+  }
+  return(clusters)
+}
+
+
+#Wywołąnie funkcji optimizer:
+
+mona_lisa_clusters <- optimizer(mona_lisa)
+dama_z_lasiczka_clusters <- optimizer(dama_z_lasiczka)
+beksinski_glowa_clusters <- optimizer(beksinski_glowa)
+beksinski_plaza_clusters <- optimizer(beksinski_plaza)
+
+
+#Skracanie nazw plików i tworzenie listy wyników klasteryzacji:
+
+short_names <- substr(names, 1, nchar(names) -4)
+clusters <- list(mona_lisa_clusters, dama_z_lasiczka_clusters, beksinski_glowa_clusters, beksinski_plaza_clusters)
+
+
+#Analiza wyników klastrowania, wizualizacja wyników oraz identyfikacja optymalnej liczby klastrów:
+
+i = 1 
+optimal_cluster_number <- c()
+for (cluster in clusters){
+  plot(cluster, type = "l", main = short_names[i], col = "navyblue")
+  abline(h=seq(1:20)/20, lty=1, col="grey")
+  points(cluster, pch = 21, bg = "red")
+  optimal_cluster_number[i] = which.max(cluster)
+  i = i + 1
+}
+
+
+#Wizualizacja wartości wskaźnika Silhouette dla klastrowania na podstawie optymalnej liczby klastrów"
+
+i = 1
+for (painting in rgb_images){
+  plot(silhouette(clara(painting[,3:5], optimal_cluster_number[i])), main = short_names[i])
+  i = i + 1
+}
+
+
+
+#Klastrowanie obrazów, identyfikacvja dominujących kolorów w klastrach, wizualizacja kolorów na obrazach:
+
+i = 1
+dominant_colors <- list()
+for (painting in rgb_images){
+  clara <- clara(painting[,3:5], optimal_cluster_number[i])
+  colors <- rgb(clara$medoids[clara$clustering, ])
+  plot(painting$y~painting$x, col = colors, asp = 1)
+  dominant_colors[[i]] <- rgb(clara$medoids)
+  i = i + 1
+}
+
+
+
+#Wizualizacja rozkładu procentowego dominujących kolorów w postaci wykresu kołowego:
+
+i = 1
+for (painting in rgb_images){
+  clara <- clara(painting[,3:5], optimal_cluster_number[i])
+  df <- data.frame(table(rgb(clara$medoids[clara$clustering,])))
+  df$percentage <- df$Freq/sum(df$Freq)*100
+  pie(df$percentage, col = as.character(df$Var1))
+  i = i + 1
+}
+
+
+
+
+#Funkcja fd.estimate() może używać różnych metod estymacji w zależności od parametrów, umożliwia estymację wymiaru fraktalnego za pomocą różnych technik, takich jak metoda
+”box counting”, analiza falkowa, madogram, periodogram. Oblicznie wymiaru fraktalnego za pomocą metody fd.estimate() z pakietu fractaldim, z wykorzystaniem metody ”madogram":
+
+fractal_dimension1 <- fd.estimate(mona)
+fractal_dimension2 <- fd.estimate(dama)
+fractal_dimension3 <- fd.estimate(glowa)
+fractal_dimension4 <- fd.estimate(plaza)
+
+print(fractal_dimension1)
+print(fractal_dimension2)
+print(fractal_dimension3)
+print(fractal_dimension4)
+
+
+#Funkcja fd.estim.wavelet() opiera się na analizie transformacji falkowej obrazu, która możebyć używana do identyfikacji fraktalnych cech obrazu na różnych skalach. 
+Oblicznie wymiaru fraktalnego za pomocą metody d.estim.wavelet() z pakietu wavelets, z wykorzystaniem metody ”wavelet”:
+
+
+img_df1 <- as.data.frame(mona)
+img_df2 <- as.data.frame(dama)
+img_df3 <- as.data.frame(glowa)
+img_df4 <- as.data.frame(plaza)
+
+fractal_dimension5 <- fd.estim.wavelet(img_df1)
+fractal_dimension6 <- fd.estim.wavelet(img_df2)
+fractal_dimension7 <- fd.estim.wavelet(img_df3)
+fractal_dimension8 <- fd.estim.wavelet(img_df4)
+
+print(fractal_dimension5)
+print(fractal_dimension6)
+print(fractal_dimension7)
+print(fractal_dimension8)
